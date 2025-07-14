@@ -2,9 +2,9 @@ import os
 import joblib
 import matplotlib.pyplot as plt
 
-from src.config        import DATA_DIR, MODEL_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE, EPOCHS
-from src.data_loader   import get_data_generators
-from src.model_builder import build_scratch_cnn
+from config        import DATA_DIR, MODEL_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE, EPOCHS
+from data_loader   import get_data_generators
+from model_builder import build_scratch_cnn
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
 def train_and_save(model, train_gen, val_gen):

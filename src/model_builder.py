@@ -1,8 +1,10 @@
+from keras.src.optimizers import Adam
 from tensorflow.keras import layers, models
 
 def build_scratch_cnn(input_shape, num_classes):
     """
-    CNN  selon le diagramme :
+    CNN selon le diagramme, avec couche d'entrée déclarée :
+      0. Input(shape)
       1. Conv2D(32) → MaxPooling2D
       2. Conv2D(64) → Conv2D(128)
       3. Flatten → Dense(512)
@@ -10,19 +12,22 @@ def build_scratch_cnn(input_shape, num_classes):
     """
     model = models.Sequential()
 
-    # 1. Convolution initiale + pooling
-    model.add(layers.Conv2D(32, (3,3), activation='relu', input_shape=input_shape))
+    # Couche d'entrée
+    model.add(layers.Input(shape=input_shape))
+
+    # Convolution initiale + pooling
+    model.add(layers.Conv2D(32, (3,3), activation='relu'))
     model.add(layers.MaxPooling2D((2,2)))
 
-    # 2. Bloc convolutions
+    # Bloc convolutions
     model.add(layers.Conv2D(64,  (3,3), activation='relu'))
     model.add(layers.Conv2D(128, (3,3), activation='relu'))
 
-    # 3. Flatten + Dense
+    # Flatten + Dense
     model.add(layers.Flatten())
     model.add(layers.Dense(512, activation='relu'))
 
-    # 4. Couche de sortie
+    # Couche de sortie
     if num_classes == 1:
         model.add(layers.Dense(1, activation='sigmoid'))
         loss = 'binary_crossentropy'
@@ -30,5 +35,6 @@ def build_scratch_cnn(input_shape, num_classes):
         model.add(layers.Dense(num_classes, activation='softmax'))
         loss = 'categorical_crossentropy'
 
-    model.compile(optimizer='adam', loss=loss, metrics=['accuracy'])
+    # Compilation
+    model.compile(optimizer=Adam(learning_rate=1e-4), loss=loss, metrics=['accuracy'])
     return model

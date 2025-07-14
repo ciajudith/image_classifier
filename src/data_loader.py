@@ -2,7 +2,7 @@ import numpy as np
 from tensorflow.keras.preprocessing.image import (
     ImageDataGenerator, load_img, img_to_array
 )
-from src.config import DATA_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE
+from config import DATA_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE
 
 def get_data_generators(
     data_dir=DATA_DIR,

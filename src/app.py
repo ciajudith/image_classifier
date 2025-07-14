@@ -5,9 +5,9 @@ from PIL import Image
 import joblib
 from tensorflow.keras.models import load_model
 
-from src.config        import MODEL_DIR, IMG_HEIGHT, IMG_WIDTH
-from src.data_loader import load_and_preprocess_image
-from src.translate    import translate_label
+from config        import MODEL_DIR, IMG_HEIGHT, IMG_WIDTH
+from data_loader import load_and_preprocess_image
+from translate    import translate_label
 
 @st.cache_resource
 def load_resources():

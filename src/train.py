@@ -2,88 +2,98 @@ import os
 import joblib
 import matplotlib.pyplot as plt
 
-from config        import DATA_DIR, MODEL_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE, EPOCHS
-from data_loader   import get_data_generators
-from model_builder import build_scratch_cnn
+from config             import MODEL_DIR, PHASE1_EPOCHS, PHASE2_EPOCHS, EPOCHS
+from data_loader        import get_data_generators
+from model_builder      import build_hybrid_model
 from tensorflow.keras.callbacks import (
-    ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+    ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 )
-def train_and_save(model, train_gen, val_gen):
+from tensorflow.keras.optimizers.schedules import CosineDecay
+from tensorflow.keras.optimizers import Adam
+
+def train_and_save():
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    callbacks = [
-        ModelCheckpoint(
-            filepath=str(MODEL_DIR / 'animals10_best.h5'),
-            save_best_only=True,
-            monitor='val_accuracy'
-        ),
-        EarlyStopping(
-            monitor='val_loss',
-            patience=5,
-            restore_best_weights=True
-        ),
-        ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=0.2,
-            patience=3,
-            min_lr=1e-6,
-        )
-    ]
+    train_gen, val_gen = get_data_generators()
 
-    history = model.fit(
+    # 1. Instanciation du modèle
+    num_classes = train_gen.num_classes
+    model = build_hybrid_model(num_classes)
+
+    # 2. Callbacks communs
+    # Nouveau
+    checkpoint = ModelCheckpoint(
+        filepath=str(MODEL_DIR / 'best_hybrid.keras'),
+        save_best_only=True,
+        monitor='val_loss'
+    )
+
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=5,
+        restore_best_weights=True
+    )
+    reduce_lr = ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.5,
+        patience=3,
+        min_lr=1e-6
+    )
+    callbacks = [checkpoint, reduce_lr, early_stop]
+
+    # --- Phase 1 : entraîner SEULEMENT la tête ---
+    for layer in model.layers:
+        if hasattr(layer, 'trainable'):
+            layer.trainable = layer.name.startswith('dense') or layer.name.startswith('batch_normalization')
+    model.compile(
+        optimizer=Adam(learning_rate=1e-3),
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    h1 = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=PHASE1_EPOCHS,
+        callbacks=callbacks,
+        verbose=1
+    )
+
+    # --- Phase 2 : fine-tuning des dernières couches de MobileNetV2 ---
+    base = model.get_layer('mobilenetv2_035')  # ou 'mobilenetv2' selon votre version
+    base.trainable = True
+    # On gèle tout sauf les 20 derniers blocs
+    for layer in base.layers[:-20]:
+        layer.trainable = False
+
+    # Scheduler CosineDecay sur PHASE2
+    steps = EPOCHS * (train_gen.samples // train_gen.batch_size)
+    schedule = CosineDecay(
+        initial_learning_rate=1e-4,
+        decay_steps=steps,
+        alpha=1e-6
+    )
+    model.compile(
+        optimizer=Adam(learning_rate=schedule),
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    h2 = model.fit(
         train_gen,
         validation_data=val_gen,
         epochs=EPOCHS,
+        initial_epoch=PHASE1_EPOCHS,
         callbacks=callbacks,
-    steps_per_epoch=300,
+        verbose=1
     )
 
-    # sauvegarde finale
-    model.save(str(MODEL_DIR / 'animals10_final.h5'))
-    joblib.dump(
-        train_gen.class_indices,
-        str(MODEL_DIR / 'class_indices.pkl')
-    )
-    return history
+    # Sauvegarde finale
+    model.save(str(MODEL_DIR/'hybrid_final.keras'))
+    joblib.dump(train_gen.class_indices, str(MODEL_DIR/'class_indices.pkl'))
 
-def plot_history(history):
-    # Accuracy
-    plt.figure()
-    plt.plot(history.history['accuracy'],    label='train_acc')
-    plt.plot(history.history['val_accuracy'], label='val_acc')
-    plt.title('Accuracy over epochs')
-    plt.xlabel('Epoch'); plt.ylabel('Accuracy'); plt.legend()
-    plt.show()
-
-    # Loss
-    plt.figure()
-    plt.plot(history.history['loss'],    label='train_loss')
-    plt.plot(history.history['val_loss'], label='val_loss')
-    plt.title('Loss over epochs')
-    plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
-    plt.show()
-
-def main():
-    # 1. Data
-    train_gen, val_gen = get_data_generators(
-        data_dir=DATA_DIR,
-        img_size=(IMG_HEIGHT, IMG_WIDTH),
-        batch_size=BATCH_SIZE
-    )
-
-    # 2. Modèle
-    model = build_scratch_cnn(
-        input_shape=(IMG_HEIGHT, IMG_WIDTH, 3),
-        num_classes=train_gen.num_classes
-    )
-
-    # 3. Entraînement
-    history = train_and_save(model, train_gen, val_gen)
-
-    # 4. Plots
-    plot_history(history)
-
-    print(f"✅ Entraînement terminé. Modèles dans : {MODEL_DIR}")
+    # Plot
+    plt.plot(h1.history['val_accuracy'] + h2.history['val_accuracy'], label='val_acc')
+    plt.plot(h1.history['val_loss']     + h2.history['val_loss'],     label='val_loss')
+    plt.legend(); plt.show()
 
 if __name__ == "__main__":
-    main()
+    train_and_save()

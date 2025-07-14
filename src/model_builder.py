@@ -1,56 +1,58 @@
+import tensorflow as tf
+from tensorflow.keras import layers, Model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras import layers, models
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.regularizers import l2
+from config import IMG_HEIGHT, IMG_WIDTH
 
-def build_scratch_cnn(input_shape, num_classes):
+def build_hybrid_model(num_classes,
+                       scratch_filters=(32, 64, 128),
+                       head_units=512,
+                       l2_reg=1e-4):
     """
-    CNN selon le diagramme, avec couche d'entrée déclarée :
-      0. Input(shape)
-      1. Conv2D(32) → MaxPooling2D
-      2. Conv2D(64) → Conv2D(128)
-      3. Flatten → Dense(512)
-      4. Output (sigmoid ou softmax)
+    Modèle hybride :
+    - Branche scratch (quelques Conv→Pool)
+    - Branche MobileNetV2 gelée
+    - Fusion + Dense → sortie
     """
-    model = models.Sequential()
+    input_shape = (IMG_HEIGHT, IMG_WIDTH, 3)
+    inputs = layers.Input(shape=input_shape)
 
-    # Couche d'entrée
-    model.add(layers.Input(shape=input_shape))
+    # --- Branche Scratch ---
+    x1 = inputs
+    for f in scratch_filters:
+        x1 = layers.Conv2D(
+            f, (3,3), padding='same',
+            activation='relu',
+            kernel_regularizer=l2(l2_reg)
+        )(x1)
+        x1 = layers.BatchNormalization()(x1)
+        x1 = layers.MaxPooling2D()(x1)
+        x1 = layers.Dropout(0.3)(x1)
+    x1 = layers.GlobalAveragePooling2D()(x1)
 
-    # Convolution initiale + pooling
-    model.add(layers.Conv2D(32, (3,3), activation='relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.MaxPooling2D((2,2)))
-    model.add(layers.Dropout(0.25))  # Dropout pour éviter l'overfitting
+    # --- Branche pré-entraînée MobileNetV2 ---
+    base = MobileNetV2(
+        input_shape=input_shape,
+        include_top=False,
+        weights='imagenet'
+    )
+    base.trainable = False
+    x2 = base(inputs, training=False)
+    x2 = layers.GlobalAveragePooling2D()(x2)
 
-    # Bloc convolutions
-    model.add(layers.Conv2D(64,  (3,3), activation='relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.MaxPooling2D((2,2)))
-    model.add(layers.Dropout(0.25))
+    # --- Fusion ---
+    x = layers.Concatenate()([x1, x2])
+    x = layers.Dense(
+        head_units,
+        activation='relu',
+        kernel_regularizer=l2(l2_reg)
+    )(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Dropout(0.5)(x)
 
-    model.add(layers.Conv2D(128, (3,3), activation='relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.MaxPooling2D((2,2)))
-    model.add(layers.Dropout(0.25))
+    # --- Sortie multiclasses ---
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
 
-    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.MaxPooling2D((2, 2)))
-    model.add(layers.Dropout(0.25))
-
-    # Flatten + Dense
-    # model.add(layers.Flatten())
-    model.add(layers.GlobalAveragePooling2D())
-    model.add(layers.Dense(512, activation='relu'))
-    model.add(layers.Dropout(0.5))
-
-    # Couche de sortie
-    if num_classes == 1:
-        model.add(layers.Dense(1, activation='sigmoid'))
-        loss = 'binary_crossentropy'
-    else:
-        model.add(layers.Dense(num_classes, activation='softmax'))
-        loss = 'categorical_crossentropy'
-
-    # Compilation
-    model.compile(optimizer=Adam(learning_rate=1e-3), loss=loss, metrics=['accuracy'])
+    model = Model(inputs, outputs)
     return model

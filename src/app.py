@@ -6,20 +6,26 @@ import joblib
 from tensorflow.keras.models import load_model
 
 from config        import MODEL_DIR, IMG_HEIGHT, IMG_WIDTH
-from data_loader import load_and_preprocess_image
-from translate    import translate_label
+from data_loader   import load_and_preprocess_image
+from translate     import translate_label
 
 @st.cache_resource
 def load_resources():
     """Charge et met en cache le modèle + mapping index→label."""
-    model_path   = str(MODEL_DIR / 'animals10_best.h5')
-    classes_path = str(MODEL_DIR / 'class_indices.pkl')
+    # On charge le meilleur checkpoint généré par ModelCheckpoint
+    model_path   = MODEL_DIR / 'best_hybrid.keras'
+    classes_path = MODEL_DIR / 'class_indices.pkl'
 
-    model = load_model(model_path)
-    class_indices = joblib.load(classes_path)
+    # Vérifie l’existence et, le cas échéant, bascule sur le modèle final
+    if not model_path.exists():
+        model_path = MODEL_DIR / 'hybrid_final.keras'
+
+    model = load_model(str(model_path))
+    class_indices = joblib.load(str(classes_path))
+
     # inversion index→label_es
     idx2label_es = {v: k for k, v in class_indices.items()}
-    # application de la traduction
+    # application de la traduction via translate_label()
     idx2label = {
         idx: translate_label(label_es)
         for idx, label_es in idx2label_es.items()
@@ -31,7 +37,7 @@ def predict(image: Image.Image, model, idx2label):
     x     = load_and_preprocess_image(image)
     preds = model.predict(x)[0]
     idx   = np.argmax(preds)
-    return idx2label[idx], preds[idx], preds
+    return idx2label[idx], float(preds[idx]), preds
 
 def main():
     st.set_page_config(page_title="Image Classifier", layout="wide")
@@ -41,8 +47,8 @@ def main():
     model, idx2label = load_resources()
 
     uploaded_file = st.file_uploader(
-        "Choisissez une image (PNG, JPG)…",
-        type=["png","jpg","jpeg"]
+        "Choisissez une image…",
+        type=["png", "jpg", "jpeg"]
     )
 
     if uploaded_file:
@@ -54,15 +60,15 @@ def main():
 
         st.success(f"Classe prédite : **{label}** ({proba*100:.1f}% de confiance)")
 
-        # Top-3
-        top_indices = preds.argsort()[-3:][::-1]
+        # Affichage du top-3
         st.write("Top 3 prédictions :")
-        for i in top_indices:
+        top3 = preds.argsort()[-3:][::-1]
+        for i in top3:
             st.write(f"- {idx2label[i]} : {preds[i]*100:.1f}%")
 
-    # Sidebar pour futur ré-entrainement
+    # Sidebar pour futur entraînement on-the-fly
     st.sidebar.header("Entraînement avancé")
-    st.sidebar.write("→ prochainement : upload ZIP & train on-the-fly")
+    st.sidebar.write("→ bientôt : upload ZIP & entraînement intégré")
 
 if __name__ == "__main__":
     main()

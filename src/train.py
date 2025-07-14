@@ -19,14 +19,9 @@ def train_and_save():
     # 1. Instanciation du modèle
     num_classes = train_gen.num_classes
     model = build_hybrid_model(num_classes)
-    dump_pkl_cb = LambdaCallback(on_epoch_end=lambda epoch, logs:
-    joblib.dump(
-        train_gen.class_indices,
-        str(MODEL_DIR / 'class_indices.pkl')
-    ) )
+
 
     # 2. Callbacks communs
-    # Nouveau
     checkpoint = ModelCheckpoint(
         filepath=str(MODEL_DIR / 'best_hybrid.keras'),
         save_best_only=True,
@@ -45,6 +40,12 @@ def train_and_save():
         patience=3,
         min_lr=1e-6
     )
+    dump_pkl_cb = LambdaCallback(on_epoch_end=lambda epoch, logs:
+    joblib.dump(
+        train_gen.class_indices,
+        str(MODEL_DIR / 'class_indices.pkl')
+    ))
+
     callbacks = [checkpoint, reduce_lr, early_stop, dump_pkl_cb]
 
     # --- Phase 1 : entraîner SEULEMENT la tête ---

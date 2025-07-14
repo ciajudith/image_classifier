@@ -34,11 +34,19 @@ def main():
     # Centrage et largeur contrôlée
     left, center, right = st.columns([0.3, 3, 0.3])
     with center:
-        st.markdown("## Classification d'image")
+        st.markdown("# Classification d'image")
         st.markdown(
             "Dataset utilisé : [Animals-10 (Kaggle)](https://www.kaggle.com/datasets/alessiocorrado99/animals10)"
         )
-        st.write("Téléversez une image pour obtenir la classe prédite et le score de confiance.")
+        st.write(
+            "Ce site permet de classifier des images d'animaux en utilisant un modèle d'apprentissage profond. "
+        )
+        model, idx2label = load_resources()
+
+        st.markdown(
+            f"**Classes possibles :** {', '.join(sorted(idx2label.values()))}"
+        )
+        st.info("Téléversez une image d'animal pour obtenir la classe prédite et le score de confiance.")
 
         model, idx2label = load_resources()
 
@@ -63,7 +71,7 @@ def main():
 
     # Sidebar pour fonctionnalités à venir
     st.sidebar.header("Entraînement avancé")
-    st.sidebar.info("🚧 Bientôt : téléversement d'un ZIP d'images et entraînement de votre propre modèle directement dans l'application.")
+    st.sidebar.info("Bientôt : téléversement d'un ZIP d'images et entraînement de votre propre modèle directement dans l'application.")
 
 if __name__ == "__main__":
     main()

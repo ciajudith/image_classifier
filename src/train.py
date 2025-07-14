@@ -6,7 +6,7 @@ from config             import MODEL_DIR, PHASE1_EPOCHS, PHASE2_EPOCHS, EPOCHS
 from data_loader        import get_data_generators
 from model_builder      import build_hybrid_model
 from tensorflow.keras.callbacks import (
-    ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+    ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, LambdaCallback
 )
 from tensorflow.keras.optimizers.schedules import CosineDecay
 from tensorflow.keras.optimizers import Adam
@@ -19,12 +19,18 @@ def train_and_save():
     # 1. Instanciation du modèle
     num_classes = train_gen.num_classes
     model = build_hybrid_model(num_classes)
+    dump_pkl_cb = LambdaCallback(on_epoch_end=lambda epoch, logs:
+    joblib.dump(
+        train_gen.class_indices,
+        str(MODEL_DIR / 'class_indices.pkl')
+    ) )
 
     # 2. Callbacks communs
     # Nouveau
     checkpoint = ModelCheckpoint(
         filepath=str(MODEL_DIR / 'best_hybrid.keras'),
         save_best_only=True,
+        save_freq='epoch',
         monitor='val_loss'
     )
 
@@ -39,7 +45,7 @@ def train_and_save():
         patience=3,
         min_lr=1e-6
     )
-    callbacks = [checkpoint, reduce_lr, early_stop]
+    callbacks = [checkpoint, reduce_lr, early_stop, dump_pkl_cb]
 
     # --- Phase 1 : entraîner SEULEMENT la tête ---
     for layer in model.layers:
@@ -57,9 +63,13 @@ def train_and_save():
         callbacks=callbacks,
         verbose=1
     )
+    joblib.dump(
+        train_gen.class_indices,
+        str(MODEL_DIR / 'class_indices.pkl')
+    )
 
     # --- Phase 2 : fine-tuning des dernières couches de MobileNetV2 ---
-    base = model.get_layer('mobilenetv2_035')  # ou 'mobilenetv2' selon votre version
+    base = model.get_layer('mobilenetv2_1.00_224')  # ou 'mobilenetv2' selon votre version
     base.trainable = True
     # On gèle tout sauf les 20 derniers blocs
     for layer in base.layers[:-20]:

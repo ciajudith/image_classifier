@@ -5,8 +5,9 @@ import matplotlib.pyplot as plt
 from config        import DATA_DIR, MODEL_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE, EPOCHS
 from data_loader   import get_data_generators
 from model_builder import build_scratch_cnn
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-
+from tensorflow.keras.callbacks import (
+    ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+)
 def train_and_save(model, train_gen, val_gen):
     os.makedirs(MODEL_DIR, exist_ok=True)
 
@@ -20,6 +21,12 @@ def train_and_save(model, train_gen, val_gen):
             monitor='val_loss',
             patience=5,
             restore_best_weights=True
+        ),
+        ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.2,
+            patience=3,
+            min_lr=1e-6,
         )
     ]
 
@@ -27,7 +34,8 @@ def train_and_save(model, train_gen, val_gen):
         train_gen,
         validation_data=val_gen,
         epochs=EPOCHS,
-        callbacks=callbacks
+        callbacks=callbacks,
+    steps_per_epoch=300,
     )
 
     # sauvegarde finale

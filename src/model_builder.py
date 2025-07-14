@@ -1,4 +1,4 @@
-from keras.src.optimizers import Adam
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import layers, models
 
 def build_scratch_cnn(input_shape, num_classes):
@@ -17,15 +17,31 @@ def build_scratch_cnn(input_shape, num_classes):
 
     # Convolution initiale + pooling
     model.add(layers.Conv2D(32, (3,3), activation='relu'))
+    model.add(layers.BatchNormalization())
     model.add(layers.MaxPooling2D((2,2)))
+    model.add(layers.Dropout(0.25))  # Dropout pour éviter l'overfitting
 
     # Bloc convolutions
     model.add(layers.Conv2D(64,  (3,3), activation='relu'))
+    model.add(layers.BatchNormalization())
+    model.add(layers.MaxPooling2D((2,2)))
+    model.add(layers.Dropout(0.25))
+
     model.add(layers.Conv2D(128, (3,3), activation='relu'))
+    model.add(layers.BatchNormalization())
+    model.add(layers.MaxPooling2D((2,2)))
+    model.add(layers.Dropout(0.25))
+
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.BatchNormalization())
+    model.add(layers.MaxPooling2D((2, 2)))
+    model.add(layers.Dropout(0.25))
 
     # Flatten + Dense
-    model.add(layers.Flatten())
+    # model.add(layers.Flatten())
+    model.add(layers.GlobalAveragePooling2D())
     model.add(layers.Dense(512, activation='relu'))
+    model.add(layers.Dropout(0.5))
 
     # Couche de sortie
     if num_classes == 1:
@@ -36,5 +52,5 @@ def build_scratch_cnn(input_shape, num_classes):
         loss = 'categorical_crossentropy'
 
     # Compilation
-    model.compile(optimizer=Adam(learning_rate=1e-4), loss=loss, metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=1e-3), loss=loss, metrics=['accuracy'])
     return model

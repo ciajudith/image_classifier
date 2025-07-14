@@ -13,10 +13,12 @@ def get_data_generators(
     """Crée et renvoie les generators train / validation."""
     datagen = ImageDataGenerator(
         rescale=1. / 255,  # Normalise les pixels entre 0 et 1
-        rotation_range=30,  # Applique une rotation aléatoire jusqu'à 30 degrés
-        width_shift_range=0.1,  # Décale horizontalement l'image de 10% de la largeur
-        height_shift_range=0.1,  # Décale verticalement l'image de 10% de la hauteur
+        rotation_range=40,  # Applique une rotation aléatoire jusqu'à 30 degrés
+        width_shift_range=0.2,  # Décale horizontalement l'image de 10% de la largeur
+        height_shift_range=0.2,  # Décale verticalement l'image de 10% de la hauteur
+        shear_range=0.2,  # Applique un cisaillement aléatoire
         zoom_range=0.2,  # Applique un zoom aléatoire jusqu'à 20%
+        brightness_range=(0.8, 1.2),  # Ajuste la luminosité de l'image
         horizontal_flip=True,  # Retourne l'image horizontalement de façon aléatoire
         fill_mode='nearest',  # Remplit les pixels vides avec la valeur la plus proche
         validation_split=val_split  # Fraction des données réservée à la validation

@@ -1,9 +1,11 @@
 import numpy as np
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array
+
 from config import DATA_DIR, IMG_HEIGHT, IMG_WIDTH, BATCH_SIZE
 
-def get_data_generators(val_split=0.2, seed=42):
+
+def get_data_generators(val_split=0.2, seed=42, batch_size=BATCH_SIZE, img_height=IMG_HEIGHT, img_width=IMG_WIDTH):
     """
     Utilise preprocess_input (–1,+1) pour MobileNetV2,
     + data-augmentation classique.
@@ -23,8 +25,8 @@ def get_data_generators(val_split=0.2, seed=42):
 
     train_gen = datagen.flow_from_directory(
         DATA_DIR,
-        target_size=(IMG_HEIGHT, IMG_WIDTH),
-        batch_size=BATCH_SIZE,
+        target_size=(img_height, img_width),
+        batch_size=batch_size,
         class_mode='categorical',
         subset='training',
         seed=seed,
@@ -32,8 +34,8 @@ def get_data_generators(val_split=0.2, seed=42):
     )
     val_gen = datagen.flow_from_directory(
         DATA_DIR,
-        target_size=(IMG_HEIGHT, IMG_WIDTH),
-        batch_size=BATCH_SIZE,
+        target_size=(img_height, img_width),
+        batch_size=batch_size,
         class_mode='categorical',
         subset='validation',
         seed=seed,
@@ -41,11 +43,12 @@ def get_data_generators(val_split=0.2, seed=42):
     )
     return train_gen, val_gen
 
+
 def load_and_preprocess_image(img, target_size=(IMG_HEIGHT, IMG_WIDTH)):
     """
     Pour l’app : prend un PIL.Image, resize, array et preprocess_input.
     """
     img = img.resize(target_size)
-    x   = img_to_array(img)
-    x   = preprocess_input(x)
+    x = img_to_array(img)
+    x = preprocess_input(x)
     return np.expand_dims(x, axis=0)

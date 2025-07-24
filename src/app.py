@@ -1,77 +1,136 @@
-import streamlit as st
-import numpy as np
-from PIL import Image
 import joblib
+import matplotlib.pyplot as plt
+import numpy as np
+import streamlit as st
+from PIL import Image
 from tensorflow.keras.models import load_model
 
-from config import MODEL_DIR, IMG_HEIGHT, IMG_WIDTH
+from config import MODEL_DIR
 from data_loader import load_and_preprocess_image
+from streamlit_live_metrics_callback import StreamlitLiveMetricsCallback
+from train import train_with_zip
 from translate import translate_label
 
-@st.cache_resource
-def load_resources():
-    """Charge et met en cache le modèle et le mapping index→label."""
-    model_path = MODEL_DIR / 'best_hybrid.keras'
-    classes_path = MODEL_DIR / 'class_indices.pkl'
+st.set_page_config(page_title="Classificateur d'Images", layout="wide")
+
+
+def load_resources(model_name='best_hybrid.keras'):
+
+    model_path = MODEL_DIR / model_name
     if not model_path.exists():
         model_path = MODEL_DIR / 'hybrid_final.keras'
+    classes_path = MODEL_DIR / 'class_indices.pkl'
+
     model = load_model(str(model_path))
     class_indices = joblib.load(str(classes_path))
     idx2label_es = {v: k for k, v in class_indices.items()}
-    idx2label = {idx: translate_label(label_es) for idx, label_es in idx2label_es.items()}
+    idx2label = {idx: translate_label(lbl) for idx, lbl in idx2label_es.items()}
     return model, idx2label
 
+
 def predict(image: Image.Image, model, idx2label):
-    """Renvoie (label, proba, vecteur_probs) pour une image PIL."""
+    """Prédit la classe, la proba et renvoie le vecteur de sorties."""
     x = load_and_preprocess_image(image)
     preds = model.predict(x)[0]
     idx = np.argmax(preds)
     return idx2label[idx], float(preds[idx]), preds
 
+
 def main():
-    st.set_page_config(page_title="Classification d'image", layout="wide")
+    st.title(" Projet : Classification d'images")
+    st.write(
+        "Cette application permet :\n"
+        "1. d’entraîner un modèle sur un ZIP d’images structurées,\n"
+        "2. de visualiser en temps réel l’évolution des métriques,\n"
+        "3. de tester la classification sur une image au choix."
+    )
 
-    # Centrage et largeur contrôlée
-    left, center, right = st.columns([0.3, 3, 0.3])
-    with center:
-        st.markdown("# Classification d'image")
-        st.markdown(
-            "Dataset utilisé : [Animals-10 (Kaggle)](https://www.kaggle.com/datasets/alessiocorrado99/animals10)"
-        )
-        st.write(
-            "Ce site permet de classifier des images d'animaux en utilisant un modèle d'apprentissage profond. "
-        )
+    tab1, tab2, tab3 = st.tabs(["Entraînement", "Validation", "Test"])
+
+    with tab1:
+        st.header("Configuration de l’entraînement")
+        uploaded_zip = st.file_uploader("Sélectionnez un ZIP de dataset", type=["zip"])
+
+        col1, col2 = st.columns(2)
+        with col1:
+            epochs = st.number_input("Nombre d'époques", min_value=1, max_value=50, value=10, step=1)
+            batch_size = st.select_slider("Taille de batch", options=[8, 16, 32, 64, 128], value=32)
+        with col2:
+            lr = st.number_input("Learning Rate", min_value=1e-6, max_value=1e-2,
+                                 value=1e-3, format="%.6f")
+            val_split = st.slider("Fraction validation", 0.1, 0.5, 0.2, step=0.05)
+
+        if uploaded_zip:
+            if st.button("Démarrer l’entraînement"):
+                callback = StreamlitLiveMetricsCallback(total_epochs=epochs)
+                zip_path = MODEL_DIR / "user_dataset.zip"
+                with open(zip_path, "wb") as f:
+                    f.write(uploaded_zip.getbuffer())
+
+                # on récupère l’historique + noms de classes
+                metrics, class_names = train_with_zip(
+                    zip_path=zip_path,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    lr=lr,
+                    val_split=val_split,
+                    extra_callbacks=[callback]
+                )
+
+                st.success("Entraînement terminé !")
+                st.write(f"Classes détectées : {', '.join(class_names)}")
+
+                # Slider pour sélectionner l'époque à afficher
+                history = metrics["history"]
+                ep = st.slider("Afficher les métriques de l'époque", 1, epochs, 1)
+
+                st.markdown(f"### Époque {ep} / {epochs}")
+                st.write(f"- **Train accuracy** : {history['accuracy'][ep - 1]:.3f}")
+                st.write(f"- **Train loss**      : {history['loss'][ep - 1]:.3f}")
+                st.write(f"- **Val accuracy** : {history['val_accuracy'][ep - 1]:.3f}")
+                st.write(f"- **Val loss**      : {history['val_loss'][ep - 1]:.3f}")
+
+                # Graphiques avec marqueur sur l'époque choisie
+                fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+                # Accuracy
+                axes[0].plot(history['accuracy'], label='Train')
+                axes[0].plot(history['val_accuracy'], label='Validation')
+                axes[0].axvline(ep - 1, color='grey', linestyle='--')
+                axes[0].set_title("Accuracy")
+                axes[0].legend()
+                # Loss
+                axes[1].plot(history['loss'], label='Train')
+                axes[1].plot(history['val_loss'], label='Validation')
+                axes[1].axvline(ep - 1, color='grey', linestyle='--')
+                axes[1].set_title("Loss")
+                axes[1].legend()
+
+                st.pyplot(fig)
+
+    with tab2:
+        st.header("Courbes de validation des métriques")
+        acc_img = MODEL_DIR / "accuracy.png"
+        loss_img = MODEL_DIR / "loss.png"
+        if acc_img.exists() and loss_img.exists():
+            st.image(str(acc_img), caption="Précision de validation", use_container_width=True)
+            st.image(str(loss_img), caption="Loss de validation", use_container_width=True)
+        else:
+            st.info("Pas de métriques disponibles – entraîne d’abord un modèle.")
+
+    with tab3:
+        st.header("Tester une image")
         model, idx2label = load_resources()
-
-        st.markdown(
-            f"**Classes possibles :** {', '.join(sorted(idx2label.values()))}"
-        )
-        st.info("Téléversez une image d'animal pour obtenir la classe prédite et le score de confiance.")
-
-        model, idx2label = load_resources()
-
-        uploaded_file = st.file_uploader(
-            "Choisissez une image…",
-            type=["png", "jpg", "jpeg"]
-        )
-
-        if uploaded_file:
-            image = Image.open(uploaded_file).convert("RGB")
-            st.image(image, caption="Votre image", use_container_width=True)
-
-            with st.spinner("Classification en cours…"):
-                label, proba, preds = predict(image, model, idx2label)
-
-            st.success(f"Classe prédite : **{label}** ({proba*100:.1f}% de confiance)")
-
+        uploaded_img = st.file_uploader("Téléversez une image (png/jpg/jpeg)", type=["png", "jpg", "jpeg"])
+        if uploaded_img:
+            img = Image.open(uploaded_img).convert("RGB")
+            st.image(img, caption="Votre image", use_container_width=True)
+            with st.spinner("Classification…"):
+                label, proba, preds = predict(img, model, idx2label)
+            st.success(f"Classe prédite : **{label}** ({proba * 100:.1f}% de confiance)")
             st.markdown("**Top 3 prédictions :**")
-            top3 = preds.argsort()[-3:][::-1]
-            for i in top3:
-                st.write(f"- {idx2label[i]} : {preds[i]*100:.1f}%")
+            for i in preds.argsort()[-3:][::-1]:
+                st.write(f"- {idx2label[i]} : {preds[i] * 100:.1f}%")
 
-    # Sidebar pour fonctionnalités à venir
-    st.sidebar.header("Entraînement avancé")
-    st.sidebar.info("Bientôt : téléversement d'un ZIP d'images et entraînement de votre propre modèle directement dans l'application.")
 
 if __name__ == "__main__":
     main()

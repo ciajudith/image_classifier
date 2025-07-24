@@ -11,7 +11,7 @@ translate = {
     "scoiattolo": "squirrel",
     "dog": "cane",
     "horse": "cavallo",
-    "elephant" : "elefante",
+    "elephant": "elefante",
     "butterfly": "farfalla",
     "chicken": "gallina",
     "cat": "gatto",

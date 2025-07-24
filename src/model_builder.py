@@ -1,9 +1,9 @@
-import tensorflow as tf
 from tensorflow.keras import layers, Model
-from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.regularizers import l2
+
 from config import IMG_HEIGHT, IMG_WIDTH
+
 
 def build_hybrid_model(num_classes,
                        scratch_filters=(32, 64, 128),
@@ -22,7 +22,7 @@ def build_hybrid_model(num_classes,
     x1 = inputs
     for f in scratch_filters:
         x1 = layers.Conv2D(
-            f, (3,3), padding='same',
+            f, (3, 3), padding='same',
             activation='relu',
             kernel_regularizer=l2(l2_reg)
         )(x1)

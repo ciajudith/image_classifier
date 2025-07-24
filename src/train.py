@@ -1,110 +1,115 @@
 import os
+import zipfile
+
 import joblib
 import matplotlib.pyplot as plt
-
-from config             import MODEL_DIR, PHASE1_EPOCHS, PHASE2_EPOCHS, EPOCHS
-from data_loader        import get_data_generators
-from model_builder      import build_hybrid_model
-from tensorflow.keras.callbacks import (
-    ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, LambdaCallback
-)
-from tensorflow.keras.optimizers.schedules import CosineDecay
+import tensorflow as tf
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.optimizers import Adam
 
-def train_and_save():
+from config import MODEL_DIR, DATA_DIR
+from data_loader import get_data_generators
+from model_builder import build_hybrid_model
+
+
+def extract_dataset(zip_path, extract_to):
+    if os.path.exists(extract_to):
+        # Clean previous data
+        for root, dirs, files in os.walk(extract_to, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to)
+
+
+def train_with_zip(zip_path, epochs, batch_size, lr, val_split, extra_callbacks=None):
     os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    extract_dataset(zip_path, DATA_DIR)
 
-    train_gen, val_gen = get_data_generators()
+    train_gen, val_gen = get_data_generators(
+        val_split=val_split,
+        seed=42,
+        batch_size=batch_size
+    )
 
-    # 1. Instanciation du modèle
     num_classes = train_gen.num_classes
+    class_names = list(train_gen.class_indices.keys())
     model = build_hybrid_model(num_classes)
 
-
-    # 2. Callbacks communs
-    checkpoint = ModelCheckpoint(
-        filepath=str(MODEL_DIR / 'best_hybrid.keras'),
-        save_best_only=True,
-        save_freq='epoch',
-        monitor='val_loss'
-    )
-
-    early_stop = EarlyStopping(
-        monitor='val_loss',
-        patience=5,
-        restore_best_weights=True
-    )
-    reduce_lr = ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.5,
-        patience=3,
-        min_lr=1e-6
-    )
-    dump_pkl_cb = LambdaCallback(on_epoch_end=lambda epoch, logs:
-    joblib.dump(
-        train_gen.class_indices,
-        str(MODEL_DIR / 'class_indices.pkl')
-    ))
-
-    callbacks = [checkpoint, reduce_lr, early_stop, dump_pkl_cb]
-
-    # --- Phase 1 : entraîner SEULEMENT la tête ---
-    for layer in model.layers:
-        if hasattr(layer, 'trainable'):
-            layer.trainable = layer.name.startswith('dense') or layer.name.startswith('batch_normalization')
     model.compile(
-        optimizer=Adam(learning_rate=1e-3),
+        optimizer=Adam(learning_rate=lr),
         loss='categorical_crossentropy',
-        metrics=['accuracy']
+        metrics=[
+            'accuracy',
+            tf.keras.metrics.Precision(name='precision'),
+            tf.keras.metrics.Recall(name='recall')
+        ]
     )
-    h1 = model.fit(
+
+    checkpoint = ModelCheckpoint(filepath=str(MODEL_DIR / 'best_hybrid.keras'), save_best_only=True, monitor='val_loss')
+    early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+    callbacks = [checkpoint, reduce_lr, early_stop]
+    if extra_callbacks:
+        callbacks += extra_callbacks
+
+    history = model.fit(
         train_gen,
         validation_data=val_gen,
-        epochs=PHASE1_EPOCHS,
-        callbacks=callbacks,
-        verbose=1
-    )
-    joblib.dump(
-        train_gen.class_indices,
-        str(MODEL_DIR / 'class_indices.pkl')
-    )
-
-    # --- Phase 2 : fine-tuning des dernières couches de MobileNetV2 ---
-    base = model.get_layer('mobilenetv2_1.00_224')  # ou 'mobilenetv2' selon votre version
-    base.trainable = True
-    # On gèle tout sauf les 20 derniers blocs
-    for layer in base.layers[:-20]:
-        layer.trainable = False
-
-    # Scheduler CosineDecay sur PHASE2
-    steps = EPOCHS * (train_gen.samples // train_gen.batch_size)
-    schedule = CosineDecay(
-        initial_learning_rate=1e-4,
-        decay_steps=steps,
-        alpha=1e-6
-    )
-    model.compile(
-        optimizer=Adam(learning_rate=schedule),
-        loss='categorical_crossentropy',
-        metrics=['accuracy']
-    )
-    h2 = model.fit(
-        train_gen,
-        validation_data=val_gen,
-        epochs=EPOCHS,
-        initial_epoch=PHASE1_EPOCHS,
+        epochs=epochs,
+        batch_size=batch_size,
         callbacks=callbacks,
         verbose=1
     )
 
-    # Sauvegarde finale
-    model.save(str(MODEL_DIR/'hybrid_final.keras'))
-    joblib.dump(train_gen.class_indices, str(MODEL_DIR/'class_indices.pkl'))
+    model.save(str(MODEL_DIR / 'hybrid_final.keras'))
+    joblib.dump(train_gen.class_indices, str(MODEL_DIR / 'class_indices.pkl'))
 
-    # Plot
-    plt.plot(h1.history['val_accuracy'] + h2.history['val_accuracy'], label='val_acc')
-    plt.plot(h1.history['val_loss']     + h2.history['val_loss'],     label='val_loss')
-    plt.legend(); plt.show()
+    # Plot and save metrics
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['accuracy'], label='Train Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.title('Accuracy Graph over Epochs')
+    plt.legend()
+    acc_path = MODEL_DIR / "accuracy.png"
+    plt.savefig(acc_path)
+    plt.close()
 
-if __name__ == "__main__":
-    train_and_save()
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['loss'], label='Train Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Loss Graph over Epochs')
+    plt.legend()
+    loss_path = MODEL_DIR / "loss.png"
+    plt.savefig(loss_path)
+    plt.close()
+
+    # Precision
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['precision'], label='Train Precision')
+    plt.plot(history.history['val_precision'], label='Validation Precision')
+    plt.title('Precision Graph over Epochs')
+    plt.legend()
+    prec_path = MODEL_DIR / "precision.png"
+    plt.savefig(prec_path)
+    plt.close()
+
+    # Recall
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['recall'], label='Train Recall')
+    plt.plot(history.history['val_recall'], label='Validation Recall')
+    plt.title('Recall Graph over Epochs')
+    plt.legend()
+    rec_path = MODEL_DIR / "recall.png"
+    plt.savefig(rec_path)
+    plt.close()
+
+    metrics = {
+        "accuracy_plot": str(acc_path),
+        "loss_plot": str(loss_path),
+        "history": history.history
+    }
+    return metrics, class_names

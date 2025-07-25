@@ -107,12 +107,27 @@ def main():
     with tab2:
         st.header("Courbes de validation des métriques")
         acc_img = MODEL_DIR / "accuracy.png"
+        prec_img  = MODEL_DIR / "precision.png"
+        rec_img = MODEL_DIR / "recall.png"
         loss_img = MODEL_DIR / "loss.png"
-        if acc_img.exists() and loss_img.exists():
-            st.image(str(acc_img), caption="Précision de validation", use_container_width=True)
-            st.image(str(loss_img), caption="Loss de validation", use_container_width=True)
+        if acc_img.exists() and prec_img.exists() and rec_img.exists() and loss_img.exists():
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Exactitude (Accuracy)")
+                st.image(str(acc_img), caption="Train & Validation Accuracy", use_container_width=True)
+
+                st.subheader("Précision (Precision)")
+                st.image(str(prec_img), caption="Train & Validation Precision", use_container_width=True)
+
+            with col2:
+                st.subheader("Rappel (Recall)")
+                st.image(str(rec_img), caption="Train & Validation Recall", use_container_width=True)
+
+                st.subheader("Perte (Loss)")
+                st.image(str(loss_img), caption="Train & Validation Loss", use_container_width=True)
         else:
-            st.info("Pas de métriques disponibles – entraîne d’abord un modèle.")
+            st.info("Pas de métriques disponibles – entraînez d’abord un modèle.")
 
     with tab3:
         st.header("Tester une image")

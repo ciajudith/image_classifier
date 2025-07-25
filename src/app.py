@@ -17,7 +17,7 @@ from train import train_with_zip
 from f1score import F1Score  # Add this import
 
 
-st.set_page_config(page_title="🐾 Classificateur d'Images", layout="wide")
+st.set_page_config(page_title="Classificateur d'Images", layout="wide")
 
 
 def load_trained_model(model_name='hybrid_final.keras'):

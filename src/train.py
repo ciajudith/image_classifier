@@ -123,12 +123,18 @@ def train_with_zip(
         ]
     )
 
+    # Callbacks pour phase 2
+
+    callbacks2 = [checkpoint, early_stop]
+    if extra_callbacks:
+        callbacks += extra_callbacks
+
     h2 = model.fit(
         train_gen,
         validation_data=val_gen,
         initial_epoch=phase1_epochs,
         epochs=epochs,
-        callbacks=callbacks,
+        callbacks=callbacks2,
         verbose=1
     )
 

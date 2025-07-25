@@ -1,74 +1,59 @@
-# Classification d'Images d'Animaux
+# Classification d'Images
 
 ## Description du Projet
-Ce projet est une application web interactive permettant de classifier des images d'animaux en utilisant un modèle d'apprentissage profond. L'utilisateur peut téléverser une image, et l'application prédit la classe de l'animal avec un score de confiance. Les classes possibles sont affichées dynamiquement sur le site.
+Cette application web interactive permet de classifier des images à l'aide d'un modèle d'apprentissage profond.  
+L'utilisateur peut téléverser un dataset au format ZIP pour entraîner le modèle, visualiser les métriques d'entraînement en temps réel, puis tester la classification sur de nouvelles images.
 
 ## Fonctionnalités
-- **Téléversement d'images** : L'utilisateur peut téléverser une image au format PNG, JPG ou JPEG.
-- **Prédiction de classe** : Le modèle prédit la classe de l'animal dans l'image avec un score de confiance.
-- **Top 3 prédictions** : Affichage des trois classes les plus probables avec leurs scores respectifs.
-- **Interface intuitive** : Une interface simple et centrée pour une expérience utilisateur optimale.
+- **Téléversement de dataset & Entraînement** : Téléversez un fichier ZIP contenant des dossiers d'images pour entraîner un modèle personnalisé.
+- **Visualisation des métriques** : Suivez l'évolution de la précision, de la perte, de la précision et du rappel pendant l'entraînement.
+- **Test du modèle** : Téléversez une image (PNG, JPG, JPEG) pour la classifier avec le modèle entraîné.
+- **Top 3 prédictions** : Affichage des trois classes les plus probables avec leur score de confiance.
+- **Interface intuitive** : Application Streamlit en mode large, facile à utiliser.
 
 ## Architecture du Modèle
-Le modèle utilisé est un modèle hybride d'apprentissage profond, entraîné sur le dataset [Animals-10](https://www.kaggle.com/datasets/alessiocorrado99/animals10). Voici les étapes principales :
-1. **Prétraitement des images** : Les images sont redimensionnées et normalisées pour correspondre aux dimensions d'entrée du modèle.
-2. **Prédiction** : Le modèle génère un vecteur de probabilités pour chaque classe.
-3. **Mapping des classes** : Les indices des classes sont traduits en labels compréhensibles grâce à un fichier de mapping.
+Le modèle est une architecture hybride de deep learning, entraînée sur les datasets fournis par l'utilisateur.
+
+**Étapes principales :**
+1. **Prétraitement** : Redimensionnement et normalisation des images.
+2. **Entraînement** : Le modèle apprend à partir du dataset téléversé.
+3. **Prédiction** : Le modèle retourne un vecteur de probabilités pour chaque classe.
+4. **Mapping** : Les indices de classes sont convertis en labels lisibles.
 
 ### Schéma de l'Architecture
 ```plaintext
-Image Input -> Prétraitement -> Modèle Hybride -> Vecteur de Probabilités -> Classe Prédite
+ZIP d'images -> Entraînement -> Modèle (.keras) + Mapping (.pkl)
+Image -> Prétraitement -> Modèle -> Vecteur de probabilités -> Classe prédite
 ```
+### Utilisation
+1. Installez les dépendances avec `pip install -r requirements.txt`.
+2. Lancez l'application avec `streamlit run app.py`.
+3. Workflow :
+   - Onglet "Entraînement" : Téléversez un fichier ZIP pour entraîner le modèle.
+   - Visualisez les métriques en temps réel.
+   - Après l'entraînement, passez à l'onglet "Validation" pour voir les résultats finaux.
+   - Onglet "Test" : Téléversez une image pour la classifier.
 
-## Utilisation
-1. **Installation des dépendances** :
-   Installez les dépendances nécessaires avec la commande suivante :
-   ```bash
-   pip install -r requirements.txt
+### Structure du Projet
    ```
-
-2. **Lancer l'application** :
-   Exécutez l'application Streamlit :
-   ```bash
-   streamlit run src/app.py
-   ```
-
-3. **Utilisation de l'interface** :
-   - Téléversez une image d'animal.
-   - Consultez la classe prédite et les scores de confiance.
-
-## Structure du Projet
-```
-image_classifier/
-│
-├─ models/ 
-├─ src/
-│   ├─ __init__.py       
-│   ├─ app.py               
-│   ├─ config.py       
-│   ├─ data_loader.py        
-│   ├─ model_builder.py 
-│   ├─ train.py          
-│   └─ translate.py           
-│
-├─ .streamlit/
-│   └─ config.toml          # Configuration du thème Streamlit
-│
-├─ requirements.txt         # Liste des dépendances
-└─ README.md                # Documentation du projet
-```
-
-## Exemple d'Utilisation
-1. Téléversez une image comme celle-ci :  
-   ![Exemple d'image]()
-
-2. Résultat attendu :  
-   - Classe prédite : **Chat**  
-   - Confiance : **95.3%**
-
-## Remarques
-- Le modèle est optimisé pour des images d'animaux uniquement.
-- Les performances peuvent varier en fonction de la qualité de l'image téléversée.
-
-## Auteurs
-Ce projet a été développé pour simplifier la classification d'images d'animaux à l'aide de l'apprentissage profond.
+   image_classifier/
+   │
+   ├─ .streamlit/
+   │   ├─ config.toml          # Configuration de Streamlit
+   ├─ models/
+   │   ├─ user_dataset.zip
+   │   ├─ hybrid_final.keras         # Créé après l'entraînement
+   │   ├─ class_indices.pkl          # Créé après l'entraînement
+   │   └─ accuracy.png, loss.png, ...
+   ├─ src/
+   │   ├─ app.py
+   │   ├─ config.py
+   │   ├─ data_loader.py
+   │   ├─ model_builder.py
+   │   ├─ streamlit_live_metrics_callback.py
+   │   ├─ train.py
+   │   └─ __init__.py
+   │
+   ├─ requirements.txt
+   └─ README.md
+   ```   

@@ -9,27 +9,25 @@ from config import MODEL_DIR
 from data_loader import load_and_preprocess_image
 from streamlit_live_metrics_callback import StreamlitLiveMetricsCallback
 from train import train_with_zip
-from translate import translate_label
 
-st.set_page_config(page_title="Classificateur d'Images", layout="wide")
+st.set_page_config(page_title="🐾 Classificateur d'Images", layout="wide")
 
 
-def load_resources(model_name='best_hybrid.keras'):
-
+def load_trained_model(model_name='hybrid_final.keras'):
     model_path = MODEL_DIR / model_name
-    if not model_path.exists():
-        model_path = MODEL_DIR / 'hybrid_final.keras'
     classes_path = MODEL_DIR / 'class_indices.pkl'
+
+    if not model_path.exists() or not classes_path.exists():
+        return None, None
 
     model = load_model(str(model_path))
     class_indices = joblib.load(str(classes_path))
-    idx2label_es = {v: k for k, v in class_indices.items()}
-    idx2label = {idx: translate_label(lbl) for idx, lbl in idx2label_es.items()}
+    idx2label = {v: k for k, v in class_indices.items()}
     return model, idx2label
 
 
 def predict(image: Image.Image, model, idx2label):
-    """Prédit la classe, la proba et renvoie le vecteur de sorties."""
+    """Predict class, probability, and return output vector."""
     x = load_and_preprocess_image(image)
     preds = model.predict(x)[0]
     idx = np.argmax(preds)
@@ -40,9 +38,9 @@ def main():
     st.title(" Projet : Classification d'images")
     st.write(
         "Cette application permet :\n"
-        "1. d’entraîner un modèle sur un ZIP d’images structurées,\n"
-        "2. de visualiser en temps réel l’évolution des métriques,\n"
-        "3. de tester la classification sur une image au choix."
+        "   1. d’entraîner un modèle sur un ZIP d’images structurées,\n"
+        "   2. de visualiser en temps réel l’évolution des métriques,\n"
+        "   3. de tester la classification sur une image au choix."
     )
 
     tab1, tab2, tab3 = st.tabs(["Entraînement", "Validation", "Test"])
@@ -67,7 +65,7 @@ def main():
                 with open(zip_path, "wb") as f:
                     f.write(uploaded_zip.getbuffer())
 
-                # on récupère l’historique + noms de classes
+                # Train and get history + class names
                 metrics, class_names = train_with_zip(
                     zip_path=zip_path,
                     epochs=epochs,
@@ -80,7 +78,7 @@ def main():
                 st.success("Entraînement terminé !")
                 st.write(f"Classes détectées : {', '.join(class_names)}")
 
-                # Slider pour sélectionner l'époque à afficher
+                # Slider to select epoch to display
                 history = metrics["history"]
                 ep = st.slider("Afficher les métriques de l'époque", 1, epochs, 1)
 
@@ -90,9 +88,8 @@ def main():
                 st.write(f"- **Val accuracy** : {history['val_accuracy'][ep - 1]:.3f}")
                 st.write(f"- **Val loss**      : {history['val_loss'][ep - 1]:.3f}")
 
-                # Graphiques avec marqueur sur l'époque choisie
+                # Graphs with marker on selected epoch
                 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-                # Accuracy
                 axes[0].plot(history['accuracy'], label='Train')
                 axes[0].plot(history['val_accuracy'], label='Validation')
                 axes[0].axvline(ep - 1, color='grey', linestyle='--')
@@ -119,17 +116,20 @@ def main():
 
     with tab3:
         st.header("Tester une image")
-        model, idx2label = load_resources()
-        uploaded_img = st.file_uploader("Téléversez une image (png/jpg/jpeg)", type=["png", "jpg", "jpeg"])
-        if uploaded_img:
-            img = Image.open(uploaded_img).convert("RGB")
-            st.image(img, caption="Votre image", use_container_width=True)
-            with st.spinner("Classification…"):
-                label, proba, preds = predict(img, model, idx2label)
-            st.success(f"Classe prédite : **{label}** ({proba * 100:.1f}% de confiance)")
-            st.markdown("**Top 3 prédictions :**")
-            for i in preds.argsort()[-3:][::-1]:
-                st.write(f"- {idx2label[i]} : {preds[i] * 100:.1f}%")
+        model, idx2label = load_trained_model()
+        if model is None or idx2label is None:
+            st.info("Aucun modèle entraîné disponible. Veuillez d'abord entraîner un modèle.")
+        else:
+            uploaded_img = st.file_uploader("Téléversez une image (png/jpg/jpeg)", type=["png", "jpg", "jpeg"])
+            if uploaded_img:
+                img = Image.open(uploaded_img).convert("RGB")
+                st.image(img, caption="Votre image", use_container_width=True)
+                with st.spinner("Classification…"):
+                    label, proba, preds = predict(img, model, idx2label)
+                st.success(f"Classe prédite : **{label}** ({proba * 100:.1f}% de confiance)")
+                st.markdown("**Top 3 prédictions :**")
+                for i in preds.argsort()[-3:][::-1]:
+                    st.write(f"- {idx2label[i]} : {preds[i] * 100:.1f}%")
 
 
 if __name__ == "__main__":

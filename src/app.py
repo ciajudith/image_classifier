@@ -20,7 +20,11 @@ def load_trained_model(model_name='hybrid_final.keras'):
     if not model_path.exists() or not classes_path.exists():
         return None, None
 
-    model = load_model(str(model_path))
+    try:
+        model = load_model(str(model_path))
+    except Exception as e:
+        st.error(f"Erreur lors du chargement du modèle : {e}")
+        return None, None
     class_indices = joblib.load(str(classes_path))
     idx2label = {v: k for k, v in class_indices.items()}
     return model, idx2label

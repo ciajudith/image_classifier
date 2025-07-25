@@ -1,3 +1,4 @@
+import json
 import zipfile
 from io import BytesIO
 
@@ -7,11 +8,14 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 from tensorflow.keras.models import load_model
+from sklearn.metrics import ConfusionMatrixDisplay
 
 from config import MODEL_DIR
 from data_loader import load_and_preprocess_image
 from streamlit_live_metrics_callback import StreamlitLiveMetricsCallback
 from train import train_with_zip
+from f1score import F1Score  # Add this import
+
 
 st.set_page_config(page_title="🐾 Classificateur d'Images", layout="wide")
 
@@ -24,7 +28,7 @@ def load_trained_model(model_name='hybrid_final.keras'):
         return None, None
 
     try:
-        model = load_model(str(model_path))
+        model = load_model(str(model_path), custom_objects={'F1Score': F1Score})
     except Exception as e:
         st.error(f"Erreur lors du chargement du modèle : {e}")
         return None, None
@@ -82,7 +86,6 @@ def main():
                 with open(zip_path, "wb") as f:
                     f.write(uploaded_zip.getbuffer())
 
-                # Train and get history + class names
                 metrics, class_names = train_with_zip(
                     zip_path=zip_path,
                     epochs=epochs,
@@ -95,14 +98,17 @@ def main():
                 st.success("Entraînement terminé !")
 
     with tab2:
-        st.header("Courbes de validation des métriques")
+        st.header("Évaluation & Métriques")
         acc_img = MODEL_DIR / "accuracy.png"
         prec_img  = MODEL_DIR / "precision.png"
         rec_img = MODEL_DIR / "recall.png"
         loss_img = MODEL_DIR / "loss.png"
-        if acc_img.exists() and prec_img.exists() and rec_img.exists() and loss_img.exists():
+        report_path = MODEL_DIR / "classification_report.json"
+        cm_path = MODEL_DIR / "confusion_matrix.npy"
 
+        if acc_img.exists() and prec_img.exists() and rec_img.exists() and loss_img.exists():
             col1, col2 = st.columns(2)
+
             with col1:
                 st.subheader("Exactitude (Accuracy)")
                 st.image(str(acc_img), caption="Train & Validation Accuracy", use_container_width=True)
@@ -117,7 +123,39 @@ def main():
                 st.subheader("Perte (Loss)")
                 st.image(str(loss_img), caption="Train & Validation Loss", use_container_width=True)
         else:
-            st.info("Pas de métriques disponibles – entraînez d’abord un modèle.")
+            st.info("Pas de courbes de training disponibles – lancez d’abord l’entraînement.")
+
+        if report_path.exists() and cm_path.exists():
+            st.markdown("---")
+            col11, col22 = st.columns(2)
+            report = json.loads(report_path.read_text())
+
+            with col11:
+                st.subheader("Matrice de confusion")
+                labels = [cls for cls in report.keys() if cls not in ["accuracy", "macro avg", "weighted avg"]]
+                cm = np.load(cm_path)
+                fig, ax = plt.subplots(figsize=(7, 7))
+                disp = ConfusionMatrixDisplay(cm, display_labels=labels)
+                disp.plot(cmap="Blues", ax=ax, colorbar=False)
+                ax.set_xticklabels(labels, rotation=45, ha='right')
+                ax.set_yticklabels(labels, rotation=0)
+                st.pyplot(fig)
+
+            with col22:
+                st.subheader("Rapport de classification")
+
+                for cls, m in report.items():
+                    if cls in ["accuracy", "macro avg", "weighted avg"]:
+                        continue
+                    st.write(
+                        f"**{cls}** : "
+                        f"precision={m['precision']:.2f}, "
+                        f"recall={m['recall']:.2f}, "
+                        f"f1-score={m['f1-score']:.2f}, "
+                        f"support={int(m['support'])}"
+                    )
+        else:
+            st.info("Pas de rapport/matrice disponible – ré-entraînez le modèle pour les générer.")
 
     with tab3:
         st.header("Tester une image")

@@ -1,8 +1,10 @@
+import json
 import os
 import zipfile
 
 import joblib
 import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.callbacks import (
     ModelCheckpoint,
@@ -11,10 +13,14 @@ from tensorflow.keras.callbacks import (
 )
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import CosineDecay
+from tensorflow.keras.metrics import TopKCategoricalAccuracy, Precision, Recall
+from sklearn.metrics import classification_report, confusion_matrix
+
 
 from config import MODEL_DIR, DATA_DIR
 from data_loader import get_data_generators
 from model_builder import build_hybrid_model
+from f1score import F1Score
 
 
 def extract_dataset(zip_path, extract_to):
@@ -83,8 +89,10 @@ def train_with_zip(
         loss='categorical_crossentropy',
         metrics=[
             'accuracy',
-            tf.keras.metrics.Precision(name='precision'),
-            tf.keras.metrics.Recall(name='recall')
+            Precision(name='precision'),
+            Recall(name='recall'),
+            F1Score(name='f1_score'),
+            TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
         ]
     )
 
@@ -118,8 +126,10 @@ def train_with_zip(
         loss='categorical_crossentropy',
         metrics=[
             'accuracy',
-            tf.keras.metrics.Precision(name='precision'),
-            tf.keras.metrics.Recall(name='recall')
+            Precision(name='precision'),
+            Recall(name='recall'),
+            F1Score(name='f1_score'),
+            TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
         ]
     )
 
@@ -176,4 +186,19 @@ def train_with_zip(
         "loss_plot": loss_path,
         "history": history
     }
+    y_pred_probs = model.predict(val_gen)
+    y_pred = y_pred_probs.argmax(axis=1)
+    y_true = val_gen.classes
+
+    report = classification_report(
+        y_true, y_pred,
+        target_names=class_names,
+        output_dict=True
+    )
+    with open(MODEL_DIR / "classification_report.json", "w") as f:
+        json.dump(report, f, indent=2)
+
+    cm = confusion_matrix(y_true, y_pred)
+    np.save(MODEL_DIR / "confusion_matrix.npy", cm)
+
     return metrics, class_names

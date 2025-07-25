@@ -1,3 +1,6 @@
+import zipfile
+from io import BytesIO
+
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,6 +66,16 @@ def main():
             val_split = st.slider("Fraction validation", 0.1, 0.5, 0.2, step=0.05)
 
         if uploaded_zip:
+            z = zipfile.ZipFile(BytesIO(uploaded_zip.getvalue()))
+            # On collecte le premier composant de chaque chemin (les dossiers racine)
+            classes = sorted({
+                path.split('/')[0]
+                for path in z.namelist()
+                if '/' in path and not path.endswith('/')
+            })
+            st.markdown("**Classes détectées dans votre dataset :**")
+            st.write("🔸 " + "\n🔸 ".join(classes))
+            st.markdown("---")
             if st.button("Démarrer l’entraînement"):
                 callback = StreamlitLiveMetricsCallback(total_epochs=epochs)
                 zip_path = MODEL_DIR / "user_dataset.zip"
@@ -80,33 +93,6 @@ def main():
                 )
 
                 st.success("Entraînement terminé !")
-                st.write(f"Classes détectées : {', '.join(class_names)}")
-
-                # Slider to select epoch to display
-                history = metrics["history"]
-                ep = st.slider("Afficher les métriques de l'époque", 1, epochs, 1)
-
-                st.markdown(f"### Époque {ep} / {epochs}")
-                st.write(f"- **Train accuracy** : {history['accuracy'][ep - 1]:.3f}")
-                st.write(f"- **Train loss**      : {history['loss'][ep - 1]:.3f}")
-                st.write(f"- **Val accuracy** : {history['val_accuracy'][ep - 1]:.3f}")
-                st.write(f"- **Val loss**      : {history['val_loss'][ep - 1]:.3f}")
-
-                # Graphs with marker on selected epoch
-                fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-                axes[0].plot(history['accuracy'], label='Train')
-                axes[0].plot(history['val_accuracy'], label='Validation')
-                axes[0].axvline(ep - 1, color='grey', linestyle='--')
-                axes[0].set_title("Accuracy")
-                axes[0].legend()
-                # Loss
-                axes[1].plot(history['loss'], label='Train')
-                axes[1].plot(history['val_loss'], label='Validation')
-                axes[1].axvline(ep - 1, color='grey', linestyle='--')
-                axes[1].set_title("Loss")
-                axes[1].legend()
-
-                st.pyplot(fig)
 
     with tab2:
         st.header("Courbes de validation des métriques")

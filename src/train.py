@@ -127,7 +127,7 @@ def train_with_zip(
 
     callbacks2 = [checkpoint, early_stop]
     if extra_callbacks:
-        callbacks += extra_callbacks
+        callbacks2 += extra_callbacks
 
     h2 = model.fit(
         train_gen,
@@ -144,8 +144,11 @@ def train_with_zip(
 
     # Combinaison des historiques
     history = {}
-    for k in h1.history:
-        history[k] = h1.history[k] + h2.history[k]
+    all_keys = set(h1.history.keys()) | set(h2.history.keys())
+    for k in all_keys:
+        h1_list = h1.history.get(k, [])
+        h2_list = h2.history.get(k, [])
+        history[k] = h1_list + h2_list
 
     # Tracés & sauvegardes des métriques
     def save_plot(key, title, ylabel):

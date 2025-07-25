@@ -67,8 +67,13 @@ class StreamlitLiveMetricsCallback(Callback):
         val_prec = logs.get('val_precision', 0.0)
         val_rec = logs.get('val_recall', 0.0)
         val_loss = logs.get('val_loss', 0.0)
+
         # learning rate
-        lr = float(tf.keras.backend.get_value(self.model.optimizer._decayed_lr(tf.float32)))        # résumé final
+        lr = self.model.optimizer.learning_rate
+        if isinstance(lr, tf.keras.optimizers.schedules.LearningRateSchedule):
+            lr = lr(self.model.optimizer.iterations)
+        lr = float(tf.keras.backend.get_value(lr))
+
         self.text_placeholder.markdown(
             f"**Fin d’époque {epoch + 1}/{self.total_epochs}**  \n"
             f"{steps}/{steps} – {int(elapsed)}s – {avg_step:.0f}s/step  \n"

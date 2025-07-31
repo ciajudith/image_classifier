@@ -28,7 +28,7 @@ Image -> Prétraitement -> Modèle hybride -> Vecteur de probabilités -> Classe
 ```
 ### Utilisation
 1. Installez les dépendances avec `pip install -r requirements.txt`.
-2. Lancez l'application avec `streamlit run app.py` en vous assurant que vous êtes dans le répertoire `image_classifier`.
+2. Lancez l'application avec `streamlit run .\src\app.py` en vous assurant que vous êtes dans le répertoire `image_classifier`.
 3. Workflow :
    - Onglet "Entraînement" : Téléversez un fichier ZIP pour entraîner le modèle. Les images doivent être organisées en sous-dossiers par classe. Ce qui permet de détecter automatiquement les classes.
    - Visualisez les métriques en temps réel.
